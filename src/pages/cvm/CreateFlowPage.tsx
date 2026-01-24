@@ -1,45 +1,21 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Loader2, Save, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { Loader2, Save, CheckCircle2, XCircle, Hourglass } from "lucide-react";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface TableCreationStatus {
-  tableName: string;
+  table_name: string;
   columns: string;
-  executionTime: number | null;
-  rowCount: number | null;
-  status: "pending" | "in_progress" | "success" | "failed";
-}
-
-interface AnalysisResult {
-  table: string;
+  execution_time: string;
   count: number;
-  status: string;
-  saved?: boolean;
+  status: "Success" | "Failed" | "Processing";
+  error?: string;
 }
-
-interface AnalysisResponse {
-  status: string;
-  date_info: string;
-  results: AnalysisResult[];
-}
-
-// Tables that will be created during analysis
-const TABLE_DEFINITIONS = [
-  { name: "GSM_GA", columns: "msisdn, date" },
-  { name: "NOT_REGISTERED", columns: "msisdn, date" },
-  { name: "REGISTERED", columns: "msisdn, date" },
-  { name: "RECEIVED_3B", columns: "msisdn, date, amount" },
-  { name: "NOT_RECEIVED_3B", columns: "msisdn, date" },
-  { name: "UTILIZED_3B", columns: "msisdn, date, amount" },
-  { name: "NOT_UTILIZED_3B", columns: "msisdn, date" },
-];
 
 export default function CreateFlowPage() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -47,53 +23,11 @@ export default function CreateFlowPage() {
   const [dateType, setDateType] = useState<"fixed" | "range">("fixed");
   const [dateVal1, setDateVal1] = useState("");
   const [dateVal2, setDateVal2] = useState("");
-  const [analysisResults, setAnalysisResults] = useState<AnalysisResponse | null>(null);
   const [savingAll, setSavingAll] = useState(false);
   const [tableStatuses, setTableStatuses] = useState<TableCreationStatus[]>([]);
   const [showTracking, setShowTracking] = useState(false);
-
-  // Initialize table statuses when analysis starts
-  const initializeTableStatuses = () => {
-    const initialStatuses: TableCreationStatus[] = TABLE_DEFINITIONS.map((def) => ({
-      tableName: def.name,
-      columns: def.columns,
-      executionTime: null,
-      rowCount: null,
-      status: "pending" as const,
-    }));
-    setTableStatuses(initialStatuses);
-    setShowTracking(true);
-  };
-
-  // Simulate table creation progress
-  const simulateTableProgress = async () => {
-    for (let i = 0; i < TABLE_DEFINITIONS.length; i++) {
-      // Set current table to in_progress
-      setTableStatuses((prev) =>
-        prev.map((t, idx) =>
-          idx === i ? { ...t, status: "in_progress" as const } : t
-        )
-      );
-
-      // Wait for simulated execution time (0.5-2 seconds)
-      const execTime = Math.random() * 1.5 + 0.5;
-      await new Promise((resolve) => setTimeout(resolve, execTime * 1000));
-
-      // Update to completed with random row count
-      setTableStatuses((prev) =>
-        prev.map((t, idx) =>
-          idx === i
-            ? {
-                ...t,
-                status: "success" as const,
-                executionTime: parseFloat(execTime.toFixed(1)),
-                rowCount: Math.floor(Math.random() * 50000) + 1000,
-              }
-            : t
-        )
-      );
-    }
-  };
+  const [analysisComplete, setAnalysisComplete] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const handleRunAnalysis = async () => {
     if (!postFix.trim()) {
@@ -109,11 +43,20 @@ export default function CreateFlowPage() {
       return;
     }
 
+    // Reset state and show tracking immediately
+    setTableStatuses([]);
+    setShowTracking(true);
+    setAnalysisComplete(false);
     setIsAnalyzing(true);
-    initializeTableStatuses();
 
-    // Start progress simulation immediately
-    const progressPromise = simulateTableProgress();
+    // Add processing row immediately
+    setTableStatuses([{
+      table_name: "Processing next...",
+      columns: "...",
+      execution_time: "...",
+      count: 0,
+      status: "Processing"
+    }]);
 
     try {
       const requestBody: {
@@ -131,70 +74,111 @@ export default function CreateFlowPage() {
         requestBody.date_val_2 = dateVal2;
       }
 
+      // Create abort controller for cleanup
+      abortControllerRef.current = new AbortController();
+
       const response = await fetch("http://127.0.0.1:5000/trigger_ga_funnel_analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
+        signal: abortControllerRef.current.signal,
       });
 
       if (!response.ok) {
         throw new Error(`API error: ${response.status} ${response.statusText}`);
       }
 
-      const data: AnalysisResponse = await response.json();
+      // Handle SSE stream
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
 
-      // Wait for progress simulation to complete
-      await progressPromise;
-
-      // Update table statuses with actual results
-      if (data.results) {
-        setTableStatuses((prev) =>
-          prev.map((t) => {
-            const result = data.results.find(
-              (r) => r.table.toUpperCase().includes(t.tableName.toUpperCase())
-            );
-            if (result) {
-              return {
-                ...t,
-                rowCount: result.count,
-                status: result.status === "Success" ? "success" : "failed",
-              };
-            }
-            return t;
-          })
-        );
+      if (!reader) {
+        throw new Error("No response body available");
       }
 
-      setAnalysisResults(data);
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) {
+          break;
+        }
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n').filter(line => line.trim());
+
+        for (const line of lines) {
+          // Parse SSE data format: "data: {...}"
+          let jsonStr = line;
+          if (line.startsWith('data:')) {
+            jsonStr = line.substring(5).trim();
+          }
+
+          if (!jsonStr || jsonStr === '[DONE]') continue;
+
+          try {
+            const data: TableCreationStatus = JSON.parse(jsonStr);
+            
+            setTableStatuses(prev => {
+              // Remove the "Processing next..." placeholder if it exists
+              const filtered = prev.filter(t => t.status !== "Processing");
+              
+              // Add the new completed table
+              const updated = [...filtered, {
+                table_name: data.table_name,
+                columns: data.columns,
+                execution_time: data.execution_time,
+                count: data.count,
+                status: data.status,
+                error: data.error
+              }];
+
+              // Add processing placeholder for next table
+              return [...updated, {
+                table_name: "Processing next...",
+                columns: "...",
+                execution_time: "...",
+                count: 0,
+                status: "Processing" as const
+              }];
+            });
+          } catch (parseError) {
+            console.warn("Failed to parse SSE chunk:", jsonStr);
+          }
+        }
+      }
+
+      // Remove the final "Processing next..." placeholder
+      setTableStatuses(prev => prev.filter(t => t.status !== "Processing"));
+      setAnalysisComplete(true);
       toast.success("Analysis completed successfully");
+
     } catch (error) {
       console.error("Analysis error:", error);
-      // Mark remaining pending tables as failed
-      setTableStatuses((prev) =>
-        prev.map((t) =>
-          t.status === "pending" || t.status === "in_progress"
-            ? { ...t, status: "failed" as const, executionTime: 0 }
-            : t
-        )
-      );
-      toast.error(error instanceof Error ? error.message : "Failed to run analysis. Please try again.");
+      
+      // Remove processing placeholder on error
+      setTableStatuses(prev => prev.filter(t => t.status !== "Processing"));
+      
+      if (error instanceof Error && error.name !== 'AbortError') {
+        toast.error(error.message || "Failed to run analysis. Please try again.");
+      }
     } finally {
       setIsAnalyzing(false);
+      abortControllerRef.current = null;
     }
   };
 
   const handleSaveAll = async () => {
-    if (!analysisResults?.results) return;
+    if (tableStatuses.length === 0) return;
 
     setSavingAll(true);
 
     try {
-      const resultsToSave = analysisResults.results
-        .filter((r) => !r.saved)
-        .map((r) => ({ table: r.table, count: r.count }));
+      const resultsToSave = tableStatuses
+        .filter(t => t.status === "Success")
+        .map(t => ({ table: t.table_name, count: t.count }));
 
       if (resultsToSave.length === 0) {
-        toast.info("All results are already saved");
+        toast.info("No successful results to save");
         return;
       }
 
@@ -212,15 +196,6 @@ export default function CreateFlowPage() {
       }
 
       const data = await response.json();
-
-      setAnalysisResults((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          results: prev.results.map((r) => ({ ...r, saved: true })),
-        };
-      });
-
       toast.success(data.message || "All results saved successfully");
     } catch (error) {
       console.error("Save all error:", error);
@@ -232,35 +207,28 @@ export default function CreateFlowPage() {
 
   const formatNumber = (num: number) => num.toLocaleString();
 
-  const getStatusBadge = (status: TableCreationStatus["status"]) => {
+  const getStatusDisplay = (status: TableCreationStatus["status"], error?: string) => {
     switch (status) {
-      case "success":
+      case "Success":
         return (
-          <Badge className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 gap-1">
-            <CheckCircle2 className="h-3 w-3" />
+          <span className="inline-flex items-center gap-1.5 text-primary font-medium">
+            <CheckCircle2 className="h-4 w-4" />
             Success
-          </Badge>
+          </span>
         );
-      case "failed":
+      case "Failed":
         return (
-          <Badge variant="destructive" className="gap-1">
-            <XCircle className="h-3 w-3" />
+          <span className="inline-flex items-center gap-1.5 text-destructive font-medium" title={error}>
+            <XCircle className="h-4 w-4" />
             Failed
-          </Badge>
+          </span>
         );
-      case "in_progress":
+      case "Processing":
         return (
-          <Badge className="bg-amber-500/20 text-amber-600 dark:text-amber-400 gap-1">
-            <Loader2 className="h-3 w-3 animate-spin" />
-            In Progress
-          </Badge>
-        );
-      case "pending":
-        return (
-          <Badge variant="secondary" className="gap-1">
-            <Clock className="h-3 w-3" />
-            Pending
-          </Badge>
+          <span className="inline-flex items-center gap-1.5 text-muted-foreground font-medium">
+            <Hourglass className="h-4 w-4 animate-pulse" />
+            Processing
+          </span>
         );
     }
   };
@@ -371,18 +339,25 @@ export default function CreateFlowPage() {
                 </TableHeader>
                 <TableBody>
                   {tableStatuses.map((table, idx) => (
-                    <TableRow key={idx} className="hover:bg-muted/30">
-                      <TableCell className="font-mono font-medium">{table.tableName}</TableCell>
+                    <TableRow 
+                      key={idx} 
+                      className={table.status === "Processing" ? "bg-muted/60" : "hover:bg-muted/30"}
+                    >
+                      <TableCell className="font-mono font-medium">
+                        {table.table_name}
+                      </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
                         {table.columns || "—"}
                       </TableCell>
                       <TableCell className="text-right font-mono">
-                        {table.executionTime !== null ? `${table.executionTime}s` : "—"}
+                        {table.status === "Processing" ? "..." : table.execution_time || "—"}
                       </TableCell>
                       <TableCell className="text-right font-mono">
-                        {table.rowCount !== null ? formatNumber(table.rowCount) : "—"}
+                        {table.status === "Processing" ? "..." : (table.count > 0 ? formatNumber(table.count) : "—")}
                       </TableCell>
-                      <TableCell className="text-center">{getStatusBadge(table.status)}</TableCell>
+                      <TableCell className="text-center">
+                        {getStatusDisplay(table.status, table.error)}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -393,11 +368,11 @@ export default function CreateFlowPage() {
       )}
 
       {/* Save All Button - Only shown when analysis is complete */}
-      {analysisResults && (
+      {analysisComplete && tableStatuses.some(t => t.status === "Success") && (
         <div className="flex justify-end">
           <Button
             onClick={handleSaveAll}
-            disabled={analysisResults.results.every((r) => r.saved) || savingAll}
+            disabled={savingAll}
             size="lg"
             className="gap-2"
           >
