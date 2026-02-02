@@ -1,8 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Clock } from "lucide-react";
-import { format, subDays } from "date-fns";
+import { RefreshCw, Clock, Loader2 } from "lucide-react";
+import { format } from "date-fns";
 import {
   Table,
   TableBody,
@@ -33,36 +33,88 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 
-interface KPIData {
+interface ApiKPIItem {
   date: string;
-  active30d: number;
+  active_30d: number;
+  dropper: number;
   ga: number;
-  droper: number;
 }
 
-// Generate mock data for last 31 days
-function generateMockData(): KPIData[] {
-  const data: KPIData[] = [];
-  const today = new Date();
-  
-  for (let i = 30; i >= 0; i--) {
-    const date = subDays(today, i);
-    data.push({
-      date: format(date, "yyyy-MM-dd"),
-      active30d: Math.floor(Math.random() * 500000) + 800000,
-      ga: Math.floor(Math.random() * 50000) + 20000,
-      droper: Math.floor(Math.random() * 30000) + 10000,
-    });
-  }
-  
-  return data;
+interface ApiResponse {
+  status: string;
+  data: ApiKPIItem[];
+}
+
+interface KPIData {
+  date: string;
+  active_30d: number;
+  ga: number;
+  dropper: number;
+  back_to_active: number;
+}
+
+// Calculate back_to_active: active_30d(today) - active_30d(yesterday) - ga(today) + dropper(today)
+function processApiData(apiData: ApiKPIItem[]): KPIData[] {
+  // Sort by date ascending for calculation
+  const sorted = [...apiData].sort((a, b) => 
+    new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+
+  return sorted.map((item, index) => {
+    let back_to_active = 0;
+    
+    if (index > 0) {
+      const yesterday = sorted[index - 1];
+      // back_to_active = active_30d(today) - active_30d(yesterday) - ga(today) + dropper(today)
+      back_to_active = item.active_30d - yesterday.active_30d - item.ga + item.dropper;
+    }
+
+    return {
+      date: item.date,
+      active_30d: item.active_30d,
+      ga: item.ga,
+      dropper: item.dropper,
+      back_to_active,
+    };
+  });
 }
 
 export default function Dashboard() {
-  const [kpiData, setKpiData] = useState<KPIData[]>(() => generateMockData());
-  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [kpiData, setKpiData] = useState<KPIData[]>([]);
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+
+  const fetchKPIData = async () => {
+    try {
+      const response = await fetch("/kip");
+      if (!response.ok) {
+        throw new Error("Failed to fetch KPI data");
+      }
+      const result: ApiResponse = await response.json();
+      
+      if (result.status === "success" && result.data) {
+        const processedData = processApiData(result.data);
+        setKpiData(processedData);
+        setLastRefresh(new Date());
+      } else {
+        throw new Error("Invalid API response");
+      }
+    } catch (error) {
+      console.error("Error fetching KPI data:", error);
+      toast.error("Failed to fetch KPI data");
+    }
+  };
+
+  useEffect(() => {
+    const loadData = async () => {
+      setIsLoading(true);
+      await fetchKPIData();
+      setIsLoading(false);
+    };
+    loadData();
+  }, []);
 
   // Table data sorted by date (latest first)
   const tableData = useMemo(() => {
@@ -86,14 +138,7 @@ export default function Dashboard() {
     setIsRefreshing(true);
     
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      
-      // Generate new data
-      const newData = generateMockData();
-      setKpiData(newData);
-      setLastRefresh(new Date());
-      
+      await fetchKPIData();
       toast.success("KPI data refreshed successfully");
     } catch (error) {
       toast.error("Failed to refresh KPI data. Please try again.");
@@ -108,16 +153,26 @@ export default function Dashboard() {
 
   const formatNumber = (num: number) => num.toLocaleString();
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-foreground">KPI Dashboard</h1>
-          <div className="flex items-center gap-2 mt-1 text-muted-foreground">
-            <Clock className="h-4 w-4" />
-            <span>Last Refresh: {format(lastRefresh, "MMM dd, yyyy HH:mm:ss")}</span>
-          </div>
+          {lastRefresh && (
+            <div className="flex items-center gap-2 mt-1 text-muted-foreground">
+              <Clock className="h-4 w-4" />
+              <span>Last Refresh: {format(lastRefresh, "MMM dd, yyyy HH:mm:ss")}</span>
+            </div>
+          )}
         </div>
         <Button
           variant="outline"
@@ -133,7 +188,7 @@ export default function Dashboard() {
       {/* Bar Chart */}
       <Card>
         <CardHeader>
-          <CardTitle>KPI Trends (Last 31 Days)</CardTitle>
+          <CardTitle>KPI Trends</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-[400px] w-full">
@@ -155,10 +210,15 @@ export default function Dashboard() {
                   tick={{ fontSize: 11 }}
                 />
                 <Tooltip 
-                  formatter={(value: number, name: string) => [
-                    formatNumber(value),
-                    name === "active30d" ? "30D Active" : name === "ga" ? "GA" : "Droper"
-                  ]}
+                  formatter={(value: number, name: string) => {
+                    const labels: Record<string, string> = {
+                      active_30d: "30D Active",
+                      ga: "GA",
+                      dropper: "Dropper",
+                      back_to_active: "Back to Active"
+                    };
+                    return [formatNumber(value), labels[name] || name];
+                  }}
                   labelFormatter={(label) => `Date: ${label}`}
                   contentStyle={{
                     backgroundColor: "hsl(var(--card))",
@@ -167,13 +227,20 @@ export default function Dashboard() {
                   }}
                 />
                 <Legend 
-                  formatter={(value) => 
-                    value === "active30d" ? "30D Active" : value === "ga" ? "GA" : "Droper"
-                  }
+                  formatter={(value) => {
+                    const labels: Record<string, string> = {
+                      active_30d: "30D Active",
+                      ga: "GA",
+                      dropper: "Dropper",
+                      back_to_active: "Back to Active"
+                    };
+                    return labels[value] || value;
+                  }}
                 />
-                <Bar dataKey="active30d" name="active30d" fill="hsl(var(--chart-1))" radius={[2, 2, 0, 0]} />
+                <Bar dataKey="active_30d" name="active_30d" fill="hsl(var(--chart-1))" radius={[2, 2, 0, 0]} />
                 <Bar dataKey="ga" name="ga" fill="hsl(var(--chart-2))" radius={[2, 2, 0, 0]} />
-                <Bar dataKey="droper" name="droper" fill="hsl(var(--chart-3))" radius={[2, 2, 0, 0]} />
+                <Bar dataKey="dropper" name="dropper" fill="hsl(var(--chart-3))" radius={[2, 2, 0, 0]} />
+                <Bar dataKey="back_to_active" name="back_to_active" fill="hsl(var(--chart-4))" radius={[2, 2, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -193,18 +260,20 @@ export default function Dashboard() {
                   <TableHead className="font-semibold">Date</TableHead>
                   <TableHead className="font-semibold text-right">30D Active</TableHead>
                   <TableHead className="font-semibold text-right">GA</TableHead>
-                  <TableHead className="font-semibold text-right">Droper</TableHead>
+                  <TableHead className="font-semibold text-right">Dropper</TableHead>
+                  <TableHead className="font-semibold text-right">Back to Active</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {tableData.map((row) => (
                   <TableRow key={row.date}>
                     <TableCell className="font-medium">
-                      {format(new Date(row.date), "MMM dd, yyyy")}
+                      {row.date}
                     </TableCell>
-                    <TableCell className="text-right">{formatNumber(row.active30d)}</TableCell>
+                    <TableCell className="text-right">{formatNumber(row.active_30d)}</TableCell>
                     <TableCell className="text-right">{formatNumber(row.ga)}</TableCell>
-                    <TableCell className="text-right">{formatNumber(row.droper)}</TableCell>
+                    <TableCell className="text-right">{formatNumber(row.dropper)}</TableCell>
+                    <TableCell className="text-right">{formatNumber(row.back_to_active)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
