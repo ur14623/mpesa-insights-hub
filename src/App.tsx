@@ -3,11 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { AuthProvider } from "@/contexts/AuthContext";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
 import MainLayout from "./pages/MainLayout";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import MetricDetail from "./pages/MetricDetail";
 import BasePreparation from "./pages/BasePreparation";
@@ -40,43 +36,35 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <AuthProvider>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/" element={
-              <ProtectedRoute>
-                <MainLayout />
-              </ProtectedRoute>
-            }>
-              <Route index element={<Dashboard />} />
-              <Route path="metric/:metricId" element={<MetricDetail />} />
-              <Route path="base-preparation" element={<BasePreparation />} />
-              <Route path="base-preparation/table/:tableName" element={<TableDetailPage />} />
-              <Route path="tables/schema" element={<MySchemaPage />} />
-              <Route path="tables/saved" element={<SavedTablesPage />} />
-              <Route path="tables/schema/:tableName/view" element={<TableViewPage />} />
-              <Route path="tables/saved/:tableName/view" element={<TableViewPage />} />
-              <Route path="campaign/ccbe" element={<CCBECampaign />} />
-              <Route path="campaign/ga-pin-reset" element={<GAPinResetCampaign />} />
-              <Route path="campaign/won-back-churner" element={<WonBackChurner />} />
-              <Route path="ops-support/court-issue" element={<CourtIssue />} />
-              <Route path="ops-support/dormant-list" element={<DormantList />} />
-              <Route path="ops-support/pinlock" element={<Pinlock />} />
-              <Route path="sql-query-library" element={<SQLQueryLibrary />} />
-              <Route path="sql-query/:queryId" element={<SQLQueryDetail />} />
-              <Route path="task-manager" element={<TaskManager />} />
-              <Route path="cvm/ga-flow-up" element={<GAFlowManagement />} />
-              <Route path="cvm/ga-flow-up/create" element={<CreateFlowPage />} />
-              <Route path="cvm/droper-tracking" element={<DroperTracking />} />
-              <Route path="cvm/pin-reset" element={<PinResetTracking />} />
-              <Route path="cvm/unutilized-balance" element={<UnutilizedBalanceTracking />} />
-              <Route path="cvm/:flowType" element={<CVMFlowPage />} />
-            </Route>
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </AuthProvider>
+        <Routes>
+          <Route path="/" element={<MainLayout />}>
+            <Route index element={<Dashboard />} />
+            <Route path="metric/:metricId" element={<MetricDetail />} />
+            <Route path="base-preparation" element={<BasePreparation />} />
+            <Route path="base-preparation/table/:tableName" element={<TableDetailPage />} />
+            <Route path="tables/schema" element={<MySchemaPage />} />
+            <Route path="tables/saved" element={<SavedTablesPage />} />
+            <Route path="tables/schema/:tableName/view" element={<TableViewPage />} />
+            <Route path="tables/saved/:tableName/view" element={<TableViewPage />} />
+            <Route path="campaign/ccbe" element={<CCBECampaign />} />
+            <Route path="campaign/ga-pin-reset" element={<GAPinResetCampaign />} />
+            <Route path="campaign/won-back-churner" element={<WonBackChurner />} />
+            <Route path="ops-support/court-issue" element={<CourtIssue />} />
+            <Route path="ops-support/dormant-list" element={<DormantList />} />
+            <Route path="ops-support/pinlock" element={<Pinlock />} />
+            <Route path="sql-query-library" element={<SQLQueryLibrary />} />
+            <Route path="sql-query/:queryId" element={<SQLQueryDetail />} />
+            <Route path="task-manager" element={<TaskManager />} />
+            <Route path="cvm/ga-flow-up" element={<GAFlowManagement />} />
+            <Route path="cvm/ga-flow-up/create" element={<CreateFlowPage />} />
+            <Route path="cvm/droper-tracking" element={<DroperTracking />} />
+            <Route path="cvm/pin-reset" element={<PinResetTracking />} />
+            <Route path="cvm/unutilized-balance" element={<UnutilizedBalanceTracking />} />
+            <Route path="cvm/:flowType" element={<CVMFlowPage />} />
+          </Route>
+          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
