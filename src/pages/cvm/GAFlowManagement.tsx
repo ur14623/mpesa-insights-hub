@@ -17,15 +17,20 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-// API response format: counts directly as numbers
+// API response format: table_name and count
+interface ApiMetric {
+  count: number;
+  table_name: string;
+}
+
 interface ApiDayData {
-  gsm_ga: number;
-  registered: number;
-  not_registered: number;
-  received_3b: number;
-  not_received_3b: number;
-  utilized_3b: number;
-  not_utilized_3b: number;
+  gsm_ga: ApiMetric;
+  registered: ApiMetric;
+  not_registered: ApiMetric;
+  received_3b: ApiMetric;
+  not_received_3b: ApiMetric;
+  utilized_3b: ApiMetric;
+  not_utilized_3b: ApiMetric;
 }
 
 interface ApiHistoryResponse {
@@ -36,13 +41,13 @@ interface ApiHistoryResponse {
 interface DailyTask {
   id: string;
   date: string;
-  gsmGa: number;
-  notRegistered: number;
-  registered: number;
-  received3Birr: number;
-  notReceived3Birr: number;
-  utilized3Birr: number;
-  notUtilized: number;
+  gsmGa: { table: string; count: number };
+  notRegistered: { table: string; count: number };
+  registered: { table: string; count: number };
+  received3Birr: { table: string; count: number };
+  notReceived3Birr: { table: string; count: number };
+  utilized3Birr: { table: string; count: number };
+  notUtilized: { table: string; count: number };
 }
 
 interface WeeklySummary {
@@ -68,17 +73,19 @@ const transformApiData = (history: Record<string, ApiDayData>): DailyTask[] => {
     return {
       id: String(index + 1),
       date: formattedDate,
-      gsmGa: data.gsm_ga || 0,
-      notRegistered: data.not_registered || 0,
-      registered: data.registered || 0,
-      received3Birr: data.received_3b || 0,
-      notReceived3Birr: data.not_received_3b || 0,
-      utilized3Birr: data.utilized_3b || 0,
-      notUtilized: data.not_utilized_3b || 0,
+      gsmGa: { table: data.gsm_ga?.table_name || "", count: data.gsm_ga?.count || 0 },
+      notRegistered: { table: data.not_registered?.table_name || "", count: data.not_registered?.count || 0 },
+      registered: { table: data.registered?.table_name || "", count: data.registered?.count || 0 },
+      received3Birr: { table: data.received_3b?.table_name || "", count: data.received_3b?.count || 0 },
+      notReceived3Birr: { table: data.not_received_3b?.table_name || "", count: data.not_received_3b?.count || 0 },
+      utilized3Birr: { table: data.utilized_3b?.table_name || "", count: data.utilized_3b?.count || 0 },
+      notUtilized: { table: data.not_utilized_3b?.table_name || "", count: data.not_utilized_3b?.count || 0 },
     };
   }).sort((a, b) => {
     // Sort by date descending
-    return new Date(b.date).getTime() - new Date(a.date).getTime();
+    const dateA = new Date(a.date.replace("-", " "));
+    const dateB = new Date(b.date.replace("-", " "));
+    return dateB.getTime() - dateA.getTime();
   });
 };
 
@@ -129,13 +136,13 @@ export default function GAFlowManagement() {
   const weeklySummary: WeeklySummary[] = useMemo(() => {
     return dailyTasks.map(task => ({
       date: task.date,
-      gsmGa: task.gsmGa,
-      notReg: task.notRegistered,
-      mpesaGa: task.registered,
-      rewarded3B: task.received3Birr,
-      notRewarded3B: task.notReceived3Birr,
-      buyBundle: task.utilized3Birr,
-      notBuyBundle: task.notUtilized,
+      gsmGa: task.gsmGa.count,
+      notReg: task.notRegistered.count,
+      mpesaGa: task.registered.count,
+      rewarded3B: task.received3Birr.count,
+      notRewarded3B: task.notReceived3Birr.count,
+      buyBundle: task.utilized3Birr.count,
+      notBuyBundle: task.notUtilized.count,
     }));
   }, [dailyTasks]);
 
@@ -145,13 +152,16 @@ export default function GAFlowManagement() {
     const search = dailyTaskSearch.toLowerCase();
     return dailyTasks.filter(task =>
       task.date.toLowerCase().includes(search) ||
-      String(task.gsmGa).includes(search) ||
-      String(task.notRegistered).includes(search) ||
-      String(task.registered).includes(search) ||
-      String(task.received3Birr).includes(search) ||
-      String(task.notReceived3Birr).includes(search) ||
-      String(task.utilized3Birr).includes(search) ||
-      String(task.notUtilized).includes(search)
+      task.gsmGa.table.toLowerCase().includes(search) ||
+      String(task.gsmGa.count).includes(search) ||
+      task.notRegistered.table.toLowerCase().includes(search) ||
+      String(task.notRegistered.count).includes(search) ||
+      task.registered.table.toLowerCase().includes(search) ||
+      String(task.registered.count).includes(search) ||
+      task.received3Birr.table.toLowerCase().includes(search) ||
+      task.notReceived3Birr.table.toLowerCase().includes(search) ||
+      task.utilized3Birr.table.toLowerCase().includes(search) ||
+      task.notUtilized.table.toLowerCase().includes(search)
     );
   }, [dailyTasks, dailyTaskSearch]);
 
@@ -221,13 +231,20 @@ export default function GAFlowManagement() {
   const exportDailyTasks = () => {
     const data = filteredDailyTasks.map(task => ({
       Date: task.date,
-      "GSM_GA": task.gsmGa,
-      "Not Registered": task.notRegistered,
-      "Registered": task.registered,
-      "Received 3B": task.received3Birr,
-      "Not Received 3B": task.notReceived3Birr,
-      "Utilized 3B": task.utilized3Birr,
-      "Not Utilized": task.notUtilized,
+      "GSM_GA_Table": task.gsmGa.table,
+      "GSM_GA_Count": task.gsmGa.count,
+      "Not_Registered_Table": task.notRegistered.table,
+      "Not_Registered_Count": task.notRegistered.count,
+      "Registered_Table": task.registered.table,
+      "Registered_Count": task.registered.count,
+      "Received_3B_Table": task.received3Birr.table,
+      "Received_3B_Count": task.received3Birr.count,
+      "Not_Received_3B_Table": task.notReceived3Birr.table,
+      "Not_Received_3B_Count": task.notReceived3Birr.count,
+      "Utilized_3B_Table": task.utilized3Birr.table,
+      "Utilized_3B_Count": task.utilized3Birr.count,
+      "Not_Utilized_Table": task.notUtilized.table,
+      "Not_Utilized_Count": task.notUtilized.count,
     }));
     
     const csv = [
@@ -339,30 +356,55 @@ export default function GAFlowManagement() {
           </div>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
-          <table className="w-full border-collapse min-w-[900px]">
+          <table className="w-full border-collapse min-w-[1400px]">
             <thead>
-              <tr className="bg-muted/50">
-                <th className="border border-border px-3 py-2 text-left font-semibold">Date</th>
-                <th className="border border-border px-3 py-2 text-right font-semibold bg-primary/10">GSM_GA</th>
-                <th className="border border-border px-3 py-2 text-right font-semibold bg-destructive/10">NOT Registered</th>
-                <th className="border border-border px-3 py-2 text-right font-semibold bg-accent/20">Registered</th>
-                <th className="border border-border px-3 py-2 text-right font-semibold bg-primary/5">RECEIVED 3 Birr</th>
-                <th className="border border-border px-3 py-2 text-right font-semibold bg-destructive/5">NOT Received 3 Birr</th>
-                <th className="border border-border px-3 py-2 text-right font-semibold bg-primary/10">Utilized 3 Birr</th>
-                <th className="border border-border px-3 py-2 text-right font-semibold bg-muted">Not Utilized</th>
+              {/* Main header row */}
+              <tr>
+                <th rowSpan={2} className="border border-border px-3 py-2 text-center font-semibold bg-muted/50">Date</th>
+                <th colSpan={2} className="border border-border px-3 py-2 text-center font-semibold bg-orange-500 text-white">GSM_GA</th>
+                <th colSpan={2} className="border border-border px-3 py-2 text-center font-semibold bg-red-500 text-white">NOT Registered on M-PESA</th>
+                <th colSpan={2} className="border border-border px-3 py-2 text-center font-semibold bg-green-500 text-white">Registered on M-PESA</th>
+                <th colSpan={2} className="border border-border px-3 py-2 text-center font-semibold bg-lime-500 text-white">RECEIVED 3 Birr</th>
+                <th colSpan={2} className="border border-border px-3 py-2 text-center font-semibold bg-red-400 text-white">NOT Received 3 Birr</th>
+                <th colSpan={2} className="border border-border px-3 py-2 text-center font-semibold bg-cyan-500 text-white">Utilized 3 Birr</th>
+                <th colSpan={2} className="border border-border px-3 py-2 text-center font-semibold bg-yellow-500 text-white">Not Utilized</th>
+              </tr>
+              {/* Sub-header row */}
+              <tr className="bg-muted/30">
+                <th className="border border-border px-2 py-1 text-left text-xs font-medium">Table</th>
+                <th className="border border-border px-2 py-1 text-right text-xs font-medium">Count</th>
+                <th className="border border-border px-2 py-1 text-left text-xs font-medium">Table</th>
+                <th className="border border-border px-2 py-1 text-right text-xs font-medium">Count</th>
+                <th className="border border-border px-2 py-1 text-left text-xs font-medium">Table</th>
+                <th className="border border-border px-2 py-1 text-right text-xs font-medium">Count</th>
+                <th className="border border-border px-2 py-1 text-left text-xs font-medium">Table</th>
+                <th className="border border-border px-2 py-1 text-right text-xs font-medium">Count</th>
+                <th className="border border-border px-2 py-1 text-left text-xs font-medium">Table</th>
+                <th className="border border-border px-2 py-1 text-right text-xs font-medium">Count</th>
+                <th className="border border-border px-2 py-1 text-left text-xs font-medium">Table</th>
+                <th className="border border-border px-2 py-1 text-right text-xs font-medium">Count</th>
+                <th className="border border-border px-2 py-1 text-left text-xs font-medium">Table</th>
+                <th className="border border-border px-2 py-1 text-right text-xs font-medium">Count</th>
               </tr>
             </thead>
             <tbody>
               {paginatedDailyTasks.map((task) => (
                 <tr key={task.id} className="hover:bg-muted/20">
-                  <td className="border border-border px-3 py-2 font-medium">{task.date}</td>
-                  <td className="border border-border px-3 py-2 text-right font-mono bg-primary/5">{formatNumber(task.gsmGa)}</td>
-                  <td className="border border-border px-3 py-2 text-right font-mono bg-destructive/5">{formatNumber(task.notRegistered)}</td>
-                  <td className="border border-border px-3 py-2 text-right font-mono bg-accent/10">{formatNumber(task.registered)}</td>
-                  <td className="border border-border px-3 py-2 text-right font-mono">{formatNumber(task.received3Birr)}</td>
-                  <td className="border border-border px-3 py-2 text-right font-mono">{formatNumber(task.notReceived3Birr)}</td>
-                  <td className="border border-border px-3 py-2 text-right font-mono bg-primary/5">{formatNumber(task.utilized3Birr)}</td>
-                  <td className="border border-border px-3 py-2 text-right font-mono bg-muted/50">{formatNumber(task.notUtilized)}</td>
+                  <td className="border border-border px-3 py-2 font-medium bg-muted/20">{task.date}</td>
+                  <td className="border border-border px-2 py-1.5 text-xs font-mono bg-orange-50 dark:bg-orange-950/30">{task.gsmGa.table}</td>
+                  <td className="border border-border px-2 py-1.5 text-right font-mono bg-orange-50 dark:bg-orange-950/30">{formatNumber(task.gsmGa.count)}</td>
+                  <td className="border border-border px-2 py-1.5 text-xs font-mono bg-red-50 dark:bg-red-950/30">{task.notRegistered.table}</td>
+                  <td className="border border-border px-2 py-1.5 text-right font-mono bg-red-50 dark:bg-red-950/30">{formatNumber(task.notRegistered.count)}</td>
+                  <td className="border border-border px-2 py-1.5 text-xs font-mono bg-green-50 dark:bg-green-950/30">{task.registered.table}</td>
+                  <td className="border border-border px-2 py-1.5 text-right font-mono bg-green-50 dark:bg-green-950/30">{formatNumber(task.registered.count)}</td>
+                  <td className="border border-border px-2 py-1.5 text-xs font-mono bg-lime-50 dark:bg-lime-950/30">{task.received3Birr.table}</td>
+                  <td className="border border-border px-2 py-1.5 text-right font-mono bg-lime-50 dark:bg-lime-950/30">{formatNumber(task.received3Birr.count)}</td>
+                  <td className="border border-border px-2 py-1.5 text-xs font-mono bg-red-50/70 dark:bg-red-950/20">{task.notReceived3Birr.table}</td>
+                  <td className="border border-border px-2 py-1.5 text-right font-mono bg-red-50/70 dark:bg-red-950/20">{formatNumber(task.notReceived3Birr.count)}</td>
+                  <td className="border border-border px-2 py-1.5 text-xs font-mono bg-cyan-50 dark:bg-cyan-950/30">{task.utilized3Birr.table}</td>
+                  <td className="border border-border px-2 py-1.5 text-right font-mono bg-cyan-50 dark:bg-cyan-950/30">{formatNumber(task.utilized3Birr.count)}</td>
+                  <td className="border border-border px-2 py-1.5 text-xs font-mono bg-yellow-50 dark:bg-yellow-950/30">{task.notUtilized.table}</td>
+                  <td className="border border-border px-2 py-1.5 text-right font-mono bg-yellow-50 dark:bg-yellow-950/30">{formatNumber(task.notUtilized.count)}</td>
                 </tr>
               ))}
             </tbody>
