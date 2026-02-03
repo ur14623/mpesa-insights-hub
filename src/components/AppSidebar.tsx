@@ -1,4 +1,4 @@
-import { LayoutDashboard, ChevronRight, Database, Headphones, Gavel, FileCode2, Table2, ListTodo, Users, TrendingUp, Trash2, Wallet, Lock, ArrowRightLeft, UserCheck, Moon, Key, KeyRound, Activity } from "lucide-react";
+import { LayoutDashboard, ChevronRight, Database, FileCode2, Table2, ListTodo, Users, TrendingUp, Wallet, Moon, Lock, Activity, Calendar } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -15,21 +15,13 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-const opsSupportItems = [
-  { title: "Court Issue", url: "/ops-support/court-issue", icon: Gavel },
-];
-
 const cvmItems = [
   { title: "GA Flow Up", url: "/cvm/ga-flow-up", icon: TrendingUp },
-  { title: "Droper Tracking", url: "/cvm/droper-tracking", icon: Activity },
-  { title: "PIN Reset", url: "/cvm/pin-reset", icon: KeyRound },
+  { title: "Daily Dropper Tracking", url: "/cvm/daily-dropper", icon: Activity },
+  { title: "30-Day Dropper Tracking", url: "/cvm/30d-dropper", icon: Calendar },
   { title: "Unutilized Balance", url: "/cvm/unutilized-balance", icon: Wallet },
-  { title: "DROPER", url: "/cvm/droper", icon: Trash2 },
-  { title: "NOT PIN SETER", url: "/cvm/not-pin-seter", icon: Key },
-  { title: "CBE2MPESA", url: "/cvm/cbe2mpesa", icon: ArrowRightLeft },
-  { title: "Churn Win Back", url: "/cvm/churn-win-back", icon: UserCheck },
   { title: "Dormant Activation", url: "/cvm/dormant-activation", icon: Moon },
-  { title: "PIN UNLOCK", url: "/cvm/pin-unlock", icon: Lock },
+  { title: "PIN Unlock", url: "/cvm/pin-unlock", icon: Lock },
 ];
 
 export function AppSidebar() {
@@ -119,42 +111,6 @@ export function AppSidebar() {
                   </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-
-              {/* Ops Support - Collapsible */}
-              {open ? (
-                <Collapsible className="group/collapsible">
-                  <SidebarMenuItem>
-                    <CollapsibleTrigger asChild>
-                      <SidebarMenuButton className="group relative overflow-hidden rounded-lg hover:bg-sidebar-accent/80 transition-all duration-300">
-                        <div className="absolute inset-0 bg-gradient-primary opacity-0 group-hover:opacity-5 transition-opacity" />
-                        <Headphones className="h-4 w-4 transition-transform group-hover:scale-110 group-hover:text-sidebar-primary" />
-                        <span className="text-sm transition-colors">Ops Support</span>
-                        <ChevronRight className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-90" />
-                      </SidebarMenuButton>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <SidebarMenuSub>
-                        {opsSupportItems.map((item, idx) => (
-                          <SidebarMenuSubItem key={item.title} className="animate-fade-in" style={{ animationDelay: `${idx * 15}ms` }}>
-                            <SidebarMenuSubButton asChild className="group relative overflow-hidden hover:bg-sidebar-accent/80 transition-all duration-300">
-                              <NavLink to={item.url} className="relative z-10" activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium">
-                                <item.icon className="h-3.5 w-3.5 transition-transform group-hover:scale-110" />
-                                <span className="text-xs">{item.title}</span>
-                              </NavLink>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        ))}
-                      </SidebarMenuSub>
-                    </CollapsibleContent>
-                  </SidebarMenuItem>
-                </Collapsible>
-              ) : (
-                <SidebarMenuItem className="animate-fade-in">
-                  <SidebarMenuButton className="group relative overflow-hidden rounded-lg hover:bg-sidebar-accent/80 transition-all duration-300 justify-center">
-                    <Headphones className="h-4 w-4 transition-transform group-hover:scale-110 group-hover:text-sidebar-primary" />
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
 
               {/* CVM - Collapsible */}
               {open ? (
